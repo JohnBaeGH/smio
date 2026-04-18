@@ -1,0 +1,104 @@
+# Smio - The Smartest Way to Pre-order for Your Team
+
+## 🚀 About Smio
+
+**Smio**는 **스마트 미리 오더(Smart Pre-order)**의 약자로, 우리 팀의 소중한 시간과 에너지를 지키기 위해 탄생한 가장 스마트한 단체 주문 솔루션입니다.
+
+잊어버리세요, 어제의 그 복잡했던 주문을. 점심시간만 되면 울리는 수십 개의 메시지, 일일이 메뉴를 확인하고 받아 적던 시간들, 혹시라도 주문을 잘못 넣을까 걱정하던 마음. 이제, **스미오(Smio)**가 그 모든 불편함을 끝냅니다.
+
+## ✨ 주요 기능
+
+### 🔗 URL 하나로 주문방 개설
+- 네이버 플레이스 식당 주소를 붙여넣는 순간, 모두를 위한 주문판이 열립니다
+- 복잡한 설정 없이 즉시 사용 가능
+
+### 📱 실시간 메뉴 취합
+- 누가 무엇을 담았는지 모두가 함께 확인
+- 중복 주문이나 누락 걱정 없이 메뉴 추가 가능
+- 실시간으로 업데이트되는 주문 현황
+
+### 💰 완벽한 자동 정산
+- 메뉴별, 사람별 최종 주문서와 총액이 자동으로 계산
+- 복잡했던 정산 과정이 투명하고 간편해집니다
+- 개인별 금액 자동 계산
+
+## 🛠️ 기술 스택
+
+- **Frontend**: Streamlit
+- **Web Scraping**: Selenium, BeautifulSoup
+- **Browser Automation**: Chrome WebDriver
+- **Data Processing**: Pandas
+- **UI/UX**: Custom CSS with modern design
+
+## 🚀 설치 및 실행
+
+### 필수 요구사항
+- Python 3.8+
+- Chrome 브라우저
+
+### 설치 방법
+
+1. 저장소 클론
+```bash
+git clone https://github.com/JohnBaeGH/smio_app.git
+cd smio_app
+```
+
+2. 필요한 패키지 설치
+```bash
+pip install streamlit pandas selenium beautifulsoup4 webdriver-manager requests
+```
+
+3. 앱 실행
+```bash
+streamlit run smio_app.py
+```
+
+4. 브라우저에서 접속
+```
+http://localhost:8501
+```
+
+## 📖 사용 방법
+
+1. **주문방 만들기**: 네이버 플레이스 URL을 입력하고 "주문방 만들기" 버튼 클릭
+2. **메뉴 선택**: 팀원들이 각자 메뉴를 선택하고 수량 지정
+3. **실시간 확인**: 누가 무엇을 주문했는지 실시간으로 확인
+4. **최종 주문서**: 자동으로 계산된 총액과 개인별 금액으로 완벽한 주문서 완성
+
+## 🎯 특징
+
+- **투명성**: 모든 주문 과정이 실시간으로 공유
+- **편의성**: 복잡한 설정 없이 즉시 사용 가능
+- **정확성**: 자동 계산으로 실수 없는 정산
+- **협업성**: 팀 전체가 함께 참여하는 주문 시스템
+
+## 🤝 기여하기
+
+이 프로젝트에 기여하고 싶으시다면:
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## 📄 라이선스
+
+이 프로젝트는 MIT 라이선스 하에 배포됩니다. 자세한 내용은 `LICENSE` 파일을 참조하세요.
+
+## 👨‍💻 개발자
+
+**John** - [GitHub](https://github.com/JohnBaeGH)
+
+## 🙏 감사의 말
+
+- 네이버 플레이스 API
+- Streamlit 커뮤니티
+- Selenium 개발팀
+
+---
+
+**Smio**는 단순한 앱이 아닙니다. 서로의 시간을 존중하고, 팀의 동료를 배려하며, 모두의 점심시간을 더 즐겁게 만드는 **새로운 업무 문화**입니다.
+
+지금 바로 경험해보세요. 가장 스마트한 우리 팀의 첫걸음, **Smio**.

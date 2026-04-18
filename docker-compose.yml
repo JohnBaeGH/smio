@@ -1,0 +1,34 @@
+version: "3.8"
+
+services:
+  smio:
+    image: smio/app:latest
+    container_name: smio
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      # Streamlit/앱 환경
+      - BASE_URL=https://smio2.johnbae.co.kr
+      - PORT=8080
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_SERVER_ENABLE_CORS=false
+      - STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=false
+      # Chromium/Xvfb
+      - DISPLAY=:99
+      - CHROME_BIN=/usr/bin/chromium
+      - CHROMEDRIVER_PATH=/usr/bin/chromedriver
+    ports:
+      # NAS 로컬테스트 시 직접포트, 운영은 리버스프록시로 80/443 → 8080
+      - "8080:8080"
+    volumes:
+      # 주문방/로그 지속화
+      - smio_rooms:/app/rooms
+      - smio_logs:/app/logs
+    restart: unless-stopped
+
+volumes:
+  smio_rooms:
+  smio_logs:
+
+
