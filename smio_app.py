@@ -360,38 +360,35 @@ def setup_chrome_driver():
     속도 최적화된 Chrome WebDriver를 설정합니다.
     """
     options = webdriver.ChromeOptions()
-    
-    # 필수 옵션들
-    options.add_argument('--headless')  # 필수: GUI 없이 실행
+
+    # 봇 감지 우회 (네이버는 navigator.webdriver 노출 시 콘텐츠 차단)
+    options.add_argument('--disable-blink-features=AutomationControlled')
+    options.add_experimental_option('excludeSwitches', ['enable-automation'])
+    options.add_experimental_option('useAutomationExtension', False)
+
+    # 필수 옵션
+    options.add_argument('--headless')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     options.add_argument('--disable-gpu')
     options.add_argument('--disable-extensions')
     options.add_argument('--disable-plugins')
-    options.add_argument('--disable-images')  # 이미지 로딩 비활성화로 속도 향상
-    options.add_argument('--disable-javascript')  # JavaScript 비활성화로 속도 향상
-    options.add_argument('--disable-css')  # CSS 비활성화로 속도 향상
+    options.add_argument('--disable-images')
     options.add_argument('--disable-logging')
     options.add_argument('--log-level=3')
     options.add_argument('--silent')
-    options.add_argument('--window-size=1280,720')  # 작은 크기로 메모리 절약
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36")
-    
-    # 속도 최적화를 위한 옵션들
+    options.add_argument('--window-size=1280,720')
+    options.add_argument('user-agent=Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36')
+
+    # 속도 최적화
     options.add_argument('--disable-background-timer-throttling')
     options.add_argument('--disable-renderer-backgrounding')
     options.add_argument('--disable-backgrounding-occluded-windows')
-    options.add_argument('--aggressive-cache-discard')
-    options.add_argument('--disable-features=TranslateUI,VizDisplayCompositor')
+    options.add_argument('--disable-features=TranslateUI')
     options.add_argument('--disable-background-networking')
     options.add_argument('--disable-sync')
     options.add_argument('--disable-default-apps')
-    options.add_argument('--disable-web-security')
-    options.add_argument('--disable-features=VizDisplayCompositor')
-    
-    # 메모리 사용량 최적화
     options.add_argument('--memory-pressure-off')
-    options.add_argument('--max_old_space_size=2048')  # 메모리 사용량 줄임
     
     # 단순화된 환경 감지 및 Chrome 설정
     is_cloud = (os.environ.get('STREAMLIT_SERVER_PORT') is not None or 
@@ -471,6 +468,11 @@ def scrape_restaurant_info(url):
         place_id_match = re.search(r'/(?:restaurant|place)/(\d+)', url)
         if place_id_match:
             place_id = place_id_match.group(1)
+
+        # navigator.webdriver 숨기기 (봇 감지 우회)
+        driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
+            'source': "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+        })
 
         # 1단계: 메뉴 페이지 직접 로드
         print(f"메뉴 URL 접속: {url}")
