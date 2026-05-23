@@ -458,89 +458,40 @@ def setup_chrome_driver():
 def scrape_restaurant_info(url):
     """
     주어진 네이버 플레이스 URL에서 가게 이름, 메뉴, 주차 정보를 스크래핑합니다.
+    m.place.naver.com 모바�� URL 직접 접근 - iframe 불필요
     """
     driver = None
     try:
-        # WebDriver 설정
         driver = setup_chrome_driver()
         if not driver:
             return {"error": "WebDriver 설정에 실패했습니다."}
-        
-        print(f"URL 접속 시도: {url}")
+
+        # place_id 추출 (홈 탭 URL 직접 이동에 사용)
+        place_id = None
+        place_id_match = re.search(r'/(?:restaurant|place)/(\d+)', url)
+        if place_id_match:
+            place_id = place_id_match.group(1)
+
+        # 1단계: 메뉴 페이지 직접 로드
+        print(f"메뉴 URL 접속: {url}")
         driver.get(url)
 
-        # 네이버 플레이스는 iframe 안에 주요 내용이 있으므로, iframe으로 전환해야 합니다.
-        print("iframe 찾기 시도...")
+        # iframe 없음 - 메뉴 항목 또는 탭 등장까지 대기 (최대 10초)
         try:
-            WebDriverWait(driver, 20).until(EC.frame_to_be_available_and_switch_to_it((By.ID, "entryIframe")))
-            print("entryIframe으로 전환 성공")
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR,
+                    "li.E2jtL, div.place_section_content, a[role='tab']"))
+            )
         except:
-            print("entryIframe을 찾을 수 없음, 다른 iframe 시도...")
-            try:
-                iframe_selectors = [
-                    "iframe#entryIframe",
-                    "iframe#searchIframe", 
-                    "iframe#placeIframe",
-                    "iframe[src*='entry']",
-                    "iframe[src*='place']"
-                ]
-                
-                iframe_found = False
-                for selector in iframe_selectors:
-                    try:
-                        iframe = driver.find_element(By.CSS_SELECTOR, selector)
-                        driver.switch_to.frame(iframe)
-                        print(f"iframe 전환 성공: {selector}")
-                        iframe_found = True
-                        break
-                    except:
-                        continue
-                
-                if not iframe_found:
-                    print("iframe을 찾을 수 없음, 메인 페이지에서 진행...")
-            except Exception as e:
-                print(f"iframe 처리 오류: {e}")
-                print("메인 페이지에서 진행...")
-        
-        # 페이지 로딩 대기
-        time.sleep(3)
-        
-        # 메뉴 탭 클릭
-        print("메뉴 탭 찾기 및 클릭...")
-        menu_tab = None
-        for selector in ["a[role='tab']", "a.tpj9w._tab-menu", "a[href*='/menu']", "span.veBoZ", "a._tab-menu"]:
-            try:
-                elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                for element in elements:
-                    if "메뉴" in element.text:
-                        menu_tab = element
-                        break
-                if menu_tab:
-                    break
-            except:
-                continue
-        
-        if menu_tab and menu_tab.is_displayed():
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", menu_tab)
-            time.sleep(0.5)
-            try:
-                menu_tab.click()
-                time.sleep(2)
-                print("메뉴 탭 클릭 성공")
-            except:
-                print("메뉴 탭 클릭 실패")
-        else:
-            print("메뉴 탭을 찾을 수 없음")
+            time.sleep(2)
 
-        # 더보기 버튼 클릭 (속도 최적화)
+        # 더보기 버튼 클릭
         print("더보기 버튼 클릭 시작...")
         click_count = 0
-        max_clicks = 5  # 클릭 횟수 제한으로 속도 향상
-        
+        max_clicks = 5
+
         while click_count < max_clicks:
             more_menu_btn = None
-            
-            # 더보기 버튼 찾기 (간단한 방법으로)
             try:
                 more_buttons = driver.find_elements(By.CSS_SELECTOR, "span.TeItc")
                 for btn in more_buttons:
@@ -549,36 +500,33 @@ def scrape_restaurant_info(url):
                         break
             except:
                 pass
-            
+
             if not more_menu_btn:
-                print("더보기 버튼이 더 이상 없음 - 메뉴 로드 완료")
+                print("더보기 버튼 없음 - 메뉴 로드 완료")
                 break
-            
+
             try:
                 driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", more_menu_btn)
-                time.sleep(0.5)  # 대기 시간 단축
+                time.sleep(0.2)
                 more_menu_btn.click()
-                time.sleep(1)  # 대기 시간 단축
+                time.sleep(0.4)
                 click_count += 1
             except Exception as e:
                 print(f"더보기 버튼 클릭 실패: {e}")
                 break
-        
+
         # 메뉴 정보 추출
         print("메뉴 정보 추출 시작...")
-        time.sleep(2)
-        
         current_page_source = driver.page_source
         menu_soup = BeautifulSoup(current_page_source, "html.parser")
-        
+
         menu_items = menu_soup.select("div.place_section_content ul > li.E2jtL")
         print(f"발견된 메뉴 항목 수: {len(menu_items)}")
-        
+
         menu_list = []
         processed_menus = set()
-        
-        for i, item in enumerate(menu_items):
-            # 메뉴 이름 추출
+
+        for item in menu_items:
             menu_name = None
             name_selectors = [
                 "span.lPzHi",
@@ -591,17 +539,15 @@ def scrape_restaurant_info(url):
                 "div.MXkFw span",
                 "div.meDTN span"
             ]
-            
             for selector in name_selectors:
                 name_tag = item.select_one(selector)
                 if name_tag and name_tag.text.strip():
                     menu_name = name_tag.text.strip()
                     break
-            
+
             if not menu_name:
                 continue
-            
-            # 가격 추출
+
             price = None
             price_selectors = [
                 "div.GXS1X em",
@@ -610,7 +556,6 @@ def scrape_restaurant_info(url):
                 "span[class*='price']",
                 "div[class*='price']"
             ]
-            
             for selector in price_selectors:
                 price_tag = item.select_one(selector)
                 if price_tag:
@@ -621,16 +566,14 @@ def scrape_restaurant_info(url):
                             break
                         except ValueError:
                             continue
-            
-            # 중복 제거
+
             menu_key = f"{menu_name}_{price}"
             if menu_key not in processed_menus:
                 processed_menus.add(menu_key)
-                if menu_name:
-                    menu_list.append({"name": menu_name, "price": price})
+                menu_list.append({"name": menu_name, "price": price})
 
-        # 홈 탭에서 기본 정보 추출
-        print("홈 탭 정보 추출...")
+        # 2단계: 홈 페이지 ���접 URL 이동 (탭 클릭 + sleep(2) 대신)
+        print("홈 페이지 직접 이동...")
         address = None
         phone = None
         restaurant_name = None
@@ -640,57 +583,43 @@ def scrape_restaurant_info(url):
         review_blog = None
         short_desc = None
         parking_info = "주차 정보 없음"
-        
-        # 홈 탭 클릭
-        home_tab = None
-        home_selectors = ["a[role='tab']", "a.tpj9w._tab-menu", "span.veBoZ"]
-        for selector in home_selectors:
+
+        home_url = None
+        if place_id:
+            home_url = f"https://m.place.naver.com/restaurant/{place_id}/home"
+
+        if home_url:
             try:
-                elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                for element in elements:
-                    if "홈" in element.text:
-                        home_tab = element
-                        break
-                if home_tab:
-                    break
-            except:
-                continue
-        
-        if home_tab and home_tab.is_displayed():
-            try:
-                home_tab.click()
-                time.sleep(2)
-                
-                home_page = driver.page_source
-                home_soup = BeautifulSoup(home_page, "html.parser")
-                
-                # 기본 정보 추출
+                driver.get(home_url)
+                # 가게 이름 또는 주소 등장까지 대기 (최대 8초)
+                try:
+                    WebDriverWait(driver, 8).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR,
+                            "span.GHAhO, span.LDgIH, h1, h2"))
+                    )
+                except:
+                    time.sleep(1)
+
+                home_soup = BeautifulSoup(driver.page_source, "html.parser")
+
                 address_tag = home_soup.select_one("span.LDgIH")
                 if address_tag:
                     address = address_tag.get_text(strip=True)
-                
+
                 phone_tag = home_soup.select_one("span.xlx7Q")
                 if phone_tag:
                     phone = phone_tag.get_text(strip=True)
-                
-                # 가게 이름 - 여러 셀렉터 시도
+
                 name_selectors = [
-                    "div.zD5Nm div.LylZZ.v8v5j span.GHAhO",  # 기존 셀렉터
-                    "span.GHAhO",  # 클래스만
-                    "h1",  # 헤더 태그
-                    "h2", 
-                    ".restaurant_title",
-                    ".place_name",
-                    "[data-type='title']",
-                    ".title",
-                    ".name",
-                    "div[class*='title'] span",
-                    "div[class*='name'] span",
-                    "span[class*='title']",
-                    "span[class*='name']",
+                    "div.zD5Nm div.LylZZ.v8v5j span.GHAhO",
+                    "span.GHAhO",
+                    "h1", "h2",
+                    ".restaurant_title", ".place_name",
+                    "[data-type='title']", ".title", ".name",
+                    "div[class*='title'] span", "div[class*='name'] span",
+                    "span[class*='title']", "span[class*='name']",
                     ".GHAhO"
                 ]
-                
                 for selector in name_selectors:
                     try:
                         name_tag = home_soup.select_one(selector)
@@ -700,14 +629,13 @@ def scrape_restaurant_info(url):
                             break
                     except:
                         continue
-                
-                # 업종
+
                 type_tag = home_soup.select_one("div.zD5Nm div.LylZZ.v8v5j span.lnJFt")
                 if type_tag:
                     restaurant_type = type_tag.text.strip()
-                    
+
             except Exception as e:
-                print(f"홈 탭 정보 추출 오류: {e}")
+                print(f"홈 페이지 정보 추출 오류: {e}")
 
         return {
             "name": restaurant_name or "가게 이름 정보 없음",
@@ -726,8 +654,7 @@ def scrape_restaurant_info(url):
         print(f"스크래핑 오류 발생: {e}")
         import traceback
         print(f"상세 오류 정보: {traceback.format_exc()}")
-        
-        # Streamlit Cloud 환경에서의 특별한 오류 처리
+
         if "invalid session id" in str(e):
             return {"error": "브라우저 세션이 만료되었습니다. 다시 시도해주세요."}
         elif "ChromeDriver를 찾을 수 없습니다" in str(e):
@@ -736,7 +663,7 @@ def scrape_restaurant_info(url):
             return {"error": "페이지 로딩 시간이 초과되었습니다. 네트워크 상태를 확인하고 다시 시도해주세요."}
         else:
             return {"error": f"스크래핑 중 오류가 발생했습니다: {str(e)}"}
-    
+
     finally:
         if driver:
             try:
