@@ -748,11 +748,38 @@ def scrape_restaurant_info(url):
 
 # 페이지 기본 설정 - 모바일 최적화
 st.set_page_config(
-    page_title="Smio | 스마트 팀 주문", 
-    page_icon="🍽️", 
+    page_title="Smio | 스마트 팀 주문",
+    page_icon="🍽️",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# --- PWA 메타태그 및 서비스 워커 등록 ---
+st.markdown("""
+<link rel="manifest" href="/app/static/manifest.json">
+<meta name="theme-color" content="#3b82f6">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Smio">
+<link rel="apple-touch-icon" href="/app/static/icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="152x152" href="/app/static/icons/icon-152.png">
+<link rel="apple-touch-icon" sizes="144x144" href="/app/static/icons/icon-144.png">
+<link rel="apple-touch-icon" sizes="128x128" href="/app/static/icons/icon-128.png">
+<link rel="apple-touch-icon" sizes="96x96" href="/app/static/icons/icon-96.png">
+<link rel="apple-touch-icon" sizes="72x72" href="/app/static/icons/icon-72.png">
+<meta name="msapplication-TileImage" content="/app/static/icons/icon-144.png">
+<meta name="msapplication-TileColor" content="#1e293b">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('/app/static/sw.js', { scope: '/' })
+        .then(function(reg) { console.log('Smio SW registered:', reg.scope); })
+        .catch(function(err) { console.log('Smio SW failed:', err); });
+    });
+  }
+</script>
+""", unsafe_allow_html=True)
 
 # --- 모바일 최적화 CSS 스타일링 ---
 st.markdown("""
