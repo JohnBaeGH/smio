@@ -474,170 +474,84 @@ def scrape_restaurant_info(url):
             'source': "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
         })
 
-        # 1단계: 메뉴 페이지 직접 로드
+        # 페이지 로드 — Apollo JSON 캐시("Menu:" 키)가 나타날 때까지 최대 12초 대기
         print(f"메뉴 URL 접속: {url}")
         driver.get(url)
 
-        # iframe 없음 - 메뉴 항목 또는 탭 등장까지 대기 (최대 10초)
-        try:
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR,
-                    "li.E2jtL, div.place_section_content, a[role='tab']"))
-            )
-        except:
-            time.sleep(2)
-
-        # 더보기 버튼 클릭
-        print("더보기 버튼 클릭 시작...")
-        click_count = 0
-        max_clicks = 5
-
-        while click_count < max_clicks:
-            more_menu_btn = None
-            try:
-                more_buttons = driver.find_elements(By.CSS_SELECTOR, "span.TeItc")
-                for btn in more_buttons:
-                    if "더보기" in btn.text:
-                        more_menu_btn = btn
-                        break
-            except:
-                pass
-
-            if not more_menu_btn:
-                print("더보기 버튼 없음 - 메뉴 로드 완료")
+        for _ in range(24):
+            time.sleep(0.5)
+            if '"Menu:' in driver.page_source:
                 break
+        src = driver.page_source
+        print(f"페이지 로드 완료 (HTML {len(src):,}bytes)")
 
-            try:
-                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", more_menu_btn)
-                time.sleep(0.2)
-                more_menu_btn.click()
-                time.sleep(0.4)
-                click_count += 1
-            except Exception as e:
-                print(f"더보기 버튼 클릭 실패: {e}")
-                break
-
-        # 메뉴 정보 추출
-        print("메뉴 정보 추출 시작...")
-        current_page_source = driver.page_source
-        menu_soup = BeautifulSoup(current_page_source, "html.parser")
-
-        menu_items = menu_soup.select("div.place_section_content ul > li.E2jtL")
-        print(f"발견된 메뉴 항목 수: {len(menu_items)}")
-
+        # ── 메뉴 추출: Apollo JSON 캐시에서 직접 파싱 ──────────────────
         menu_list = []
         processed_menus = set()
 
-        for item in menu_items:
-            menu_name = None
-            name_selectors = [
-                "span.lPzHi",
-                "div.yQlqY span",
-                "span[class*='name']",
-                "div[class*='name'] span",
-                "span[class*='title']",
-                "div[class*='title'] span",
-                "h3", "h4", "h5",
-                "div.MXkFw span",
-                "div.meDTN span"
-            ]
-            for selector in name_selectors:
-                name_tag = item.select_one(selector)
-                if name_tag and name_tag.text.strip():
-                    menu_name = name_tag.text.strip()
-                    break
-
-            if not menu_name:
+        raw_menus = re.findall(
+            r'"Menu:\d+_\d+":\{[^}]*?"name":"([^"]+)"[^}]*?"price":"([^"]*)"',
+            src
+        )
+        for name, price_str in raw_menus:
+            if not name:
                 continue
-
             price = None
-            price_selectors = [
-                "div.GXS1X em",
-                "div.GXS1X",
-                "em",
-                "span[class*='price']",
-                "div[class*='price']"
-            ]
-            for selector in price_selectors:
-                price_tag = item.select_one(selector)
-                if price_tag:
-                    price_text = re.sub(r'[^0-9]', '', price_tag.text)
-                    if price_text:
-                        try:
-                            price = int(price_text)
-                            break
-                        except ValueError:
-                            continue
-
-            menu_key = f"{menu_name}_{price}"
+            if price_str:
+                digits = re.sub(r'[^0-9]', '', price_str)
+                if digits:
+                    try:
+                        price = int(digits)
+                    except ValueError:
+                        pass
+            menu_key = f"{name}_{price}"
             if menu_key not in processed_menus:
                 processed_menus.add(menu_key)
-                menu_list.append({"name": menu_name, "price": price})
+                menu_list.append({"name": name, "price": price})
 
-        # 2단계: 홈 페이지 ���접 URL 이동 (탭 클릭 + sleep(2) 대신)
-        print("홈 페이지 직접 이동...")
-        address = None
-        phone = None
+        print(f"추출된 메뉴 수: {len(menu_list)}")
+
+        # ── 식당 기본정보: 동일 JSON 에서 파싱 ─────────────────────────
         restaurant_name = None
         restaurant_type = None
+        address = None
+        phone = None
         rating = None
         review_visitor = None
         review_blog = None
         short_desc = None
         parking_info = "주차 정보 없음"
 
-        home_url = None
-        if place_id:
-            home_url = f"https://m.place.naver.com/restaurant/{place_id}/home"
+        # 식당명: businessCategory 바로 앞의 name 필드
+        name_match = re.search(r'"name":"([^"]+)","businessCategory"', src)
+        if not name_match:
+            name_match = re.search(r'"placeName":"([^"]+)"', src)
+        if name_match:
+            restaurant_name = name_match.group(1).strip()
 
-        if home_url:
-            try:
-                driver.get(home_url)
-                # 가게 이름 또는 주소 등장까지 대기 (최대 8초)
-                try:
-                    WebDriverWait(driver, 8).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR,
-                            "span.GHAhO, span.LDgIH, h1, h2"))
-                    )
-                except:
-                    time.sleep(1)
+        # 주소: roadAddress 우선, 없으면 address
+        addr_match = re.search(r'"roadAddress":"([^"]+)"', src)
+        if not addr_match:
+            addr_match = re.search(r'"address":"([^"]+)"', src)
+        if addr_match:
+            address = addr_match.group(1)
 
-                home_soup = BeautifulSoup(driver.page_source, "html.parser")
+        # 전화번호
+        phone_match = re.search(r'"phone":"([^"]+)"', src)
+        if not phone_match:
+            phone_match = re.search(r'"tel":"([^"]+)"', src)
+        if phone_match:
+            phone = phone_match.group(1)
 
-                address_tag = home_soup.select_one("span.LDgIH")
-                if address_tag:
-                    address = address_tag.get_text(strip=True)
+        # 카테고리
+        cat_match = re.search(r'"businessCategory":"([^"]+)"', src)
+        if not cat_match:
+            cat_match = re.search(r'"category":"([^"]+)"', src)
+        if cat_match:
+            restaurant_type = cat_match.group(1)
 
-                phone_tag = home_soup.select_one("span.xlx7Q")
-                if phone_tag:
-                    phone = phone_tag.get_text(strip=True)
-
-                name_selectors = [
-                    "div.zD5Nm div.LylZZ.v8v5j span.GHAhO",
-                    "span.GHAhO",
-                    "h1", "h2",
-                    ".restaurant_title", ".place_name",
-                    "[data-type='title']", ".title", ".name",
-                    "div[class*='title'] span", "div[class*='name'] span",
-                    "span[class*='title']", "span[class*='name']",
-                    ".GHAhO"
-                ]
-                for selector in name_selectors:
-                    try:
-                        name_tag = home_soup.select_one(selector)
-                        if name_tag and name_tag.text.strip():
-                            restaurant_name = name_tag.text.strip()
-                            print(f"✅ 가게이름 발견: {restaurant_name} (셀렉터: {selector})")
-                            break
-                    except:
-                        continue
-
-                type_tag = home_soup.select_one("div.zD5Nm div.LylZZ.v8v5j span.lnJFt")
-                if type_tag:
-                    restaurant_type = type_tag.text.strip()
-
-            except Exception as e:
-                print(f"홈 페이지 정보 추출 오류: {e}")
+        if restaurant_name:
+            print(f"✅ 식당명: {restaurant_name} | 주소: {address} | 전화: {phone}")
 
         return {
             "name": restaurant_name or "가게 이름 정보 없음",
