@@ -1,10 +1,7 @@
-import { Platform } from "react-native";
+// EXPO_PUBLIC_API_URL 환경변수로 주입, 없으면 프로덕션 사용
+const API_URL =
+  process.env.EXPO_PUBLIC_API_URL ?? "https://smio-mobile.johnbae.co.kr/api";
 
 export function getApiBaseUrl(): string {
-  if (Platform.OS === "web") {
-    return "/api";
-  }
-  // 개발 시: 로컬 서버 주소
-  // 운영 시: 실제 도메인으로 변경
-  return "https://smio2.johnbae.co.kr/api";
+  return API_URL;
 }

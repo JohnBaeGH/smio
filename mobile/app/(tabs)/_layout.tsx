@@ -8,15 +8,20 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.mutedForeground,
+        tabBarInactiveTintColor: "#9b8ab4",
         tabBarStyle: {
-          backgroundColor: colors.card,
-          borderTopColor: colors.border,
-          borderTopWidth: 1,
+          backgroundColor: "rgba(255,255,255,0.94)",
+          borderTopWidth: 0,
+          shadowColor: colors.shadowColor,
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.06,
+          shadowRadius: 16,
+          elevation: 8,
         },
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: "600",
+          fontFamily: "Pretendard-SemiBold",
         },
       }}
     >
@@ -47,6 +52,7 @@ export default function TabLayout() {
           ),
         }}
       />
+      <Tabs.Screen name="room/[id]" options={{ href: null }} />
     </Tabs>
   );
 }

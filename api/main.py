@@ -43,6 +43,11 @@ class CreateRoomRequest(BaseModel):
     restaurant: dict
 
 
+@app.get("/api/rooms")
+def list_rooms():
+    return storage.list_rooms()
+
+
 @app.post("/api/rooms")
 def create_room(req: CreateRoomRequest):
     room_id = storage.new_room_id()
@@ -66,11 +71,18 @@ def get_room(room_id: str):
     return room
 
 
+@app.delete("/api/rooms/{room_id}")
+def delete_room(room_id: str):
+    if not storage.delete_room(room_id):
+        raise HTTPException(status_code=404, detail="주문방 없음")
+    return {"ok": True}
+
+
 # ── 주문 추가 ─────────────────────────────────────────────
 
 class OrderRequest(BaseModel):
     user_name: str
-    rank: str
+    rank: Optional[str] = ""
     menu: str
     quantity: int
     price: int
@@ -136,6 +148,24 @@ def update_order(room_id: str, user_name: str, req: OrderRequest):
     return orders[idx]
 
 
+# ── 주문 삭제 ─────────────────────────────────────────────
+
+@app.delete("/api/rooms/{room_id}/orders/{user_name}")
+def delete_order(room_id: str, user_name: str):
+    room = storage.load_room(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="주문방 없음")
+    if room.get("is_closed"):
+        raise HTTPException(status_code=403, detail="마감된 주문방입니다.")
+    orders = room.get("orders", [])
+    new_orders = [o for o in orders if o["user_name"] != user_name]
+    if len(new_orders) == len(orders):
+        raise HTTPException(status_code=404, detail="주문을 찾을 수 없습니다.")
+    room["orders"] = new_orders
+    storage.save_room(room_id, room)
+    return {"ok": True}
+
+
 # ── 주문 마감 ─────────────────────────────────────────────
 
 @app.post("/api/rooms/{room_id}/close")
@@ -145,6 +175,19 @@ def close_room(room_id: str):
         raise HTTPException(status_code=404, detail="주문방 없음")
     room["is_closed"] = True
     room["closed_at"] = datetime.datetime.now().isoformat()
+    storage.save_room(room_id, room)
+    return {"ok": True}
+
+
+# ── 주문 재개 ─────────────────────────────────────────────
+
+@app.post("/api/rooms/{room_id}/reopen")
+def reopen_room(room_id: str):
+    room = storage.load_room(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="주문방 없음")
+    room["is_closed"] = False
+    room.pop("closed_at", None)
     storage.save_room(room_id, room)
     return {"ok": True}
 

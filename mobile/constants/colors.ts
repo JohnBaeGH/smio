@@ -1,14 +1,14 @@
 const colors = {
-  primary: "#3b82f6",
-  primaryDark: "#2563eb",
-  primaryLight: "#eff6ff",
+  primary: "#8A47EB",
+  primaryDark: "#7A3DCC",
+  primaryLight: "#EDE0FF",
 
-  background: "#f8fafc",
+  background: "#F6F0FF",
   card: "#ffffff",
 
-  foreground: "#1e293b",
-  mutedForeground: "#64748b",
-  border: "#e2e8f0",
+  foreground: "#1a1623",
+  mutedForeground: "#7a6891",
+  border: "#ECE3FB",
 
   success: "#10b981",
   successLight: "#d1fae5",
@@ -20,7 +20,10 @@ const colors = {
   white: "#ffffff",
   black: "#000000",
 
-  radius: 10,
+  radius: 16,
+
+  // Purple-tinted shadow values (use with shadowColor)
+  shadowColor: "#501EB4",
 };
 
 export default colors;

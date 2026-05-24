@@ -38,6 +38,37 @@ def load_room(room_id: str) -> dict | None:
         return None
 
 
+def delete_room(room_id: str) -> bool:
+    path = ROOMS_DIR / f"{room_id}.json"
+    if not path.exists():
+        return False
+    try:
+        path.unlink()
+        return True
+    except Exception:
+        return False
+
+
+def list_rooms() -> list[dict]:
+    _ensure_dirs()
+    rooms = []
+    for path in sorted(ROOMS_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            rooms.append({
+                "room_id": data.get("room_id"),
+                "restaurant_name": data.get("restaurant_info", {}).get("name", ""),
+                "created_at": data.get("created_at", ""),
+                "is_closed": data.get("is_closed", False),
+                "closed_at": data.get("closed_at"),
+                "order_count": len(data.get("orders", [])),
+                "total_amount": sum(o.get("price", 0) * o.get("quantity", 1) for o in data.get("orders", [])),
+            })
+        except Exception:
+            pass
+    return rooms
+
+
 # ── 로그 ─────────────────────────────────────────────────
 
 def _log_path(year_month: str | None = None) -> Path:

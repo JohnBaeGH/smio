@@ -5,7 +5,7 @@ const FAVORITES_KEY = "smio_favorites";
 
 export interface UserProfile {
   name: string;
-  rank: string; // 직급
+  rank?: string;
 }
 
 export interface FavoriteRestaurant {
@@ -45,4 +45,18 @@ export async function removeFavorite(id: string): Promise<void> {
     FAVORITES_KEY,
     JSON.stringify(favorites.filter((f) => f.id !== id))
   );
+}
+
+const ADMIN_PIN_KEY = "smio_admin_pin";
+
+export async function getAdminPin(): Promise<string | null> {
+  return AsyncStorage.getItem(ADMIN_PIN_KEY);
+}
+
+export async function saveAdminPin(pin: string): Promise<void> {
+  await AsyncStorage.setItem(ADMIN_PIN_KEY, pin);
+}
+
+export async function clearAdminPin(): Promise<void> {
+  await AsyncStorage.removeItem(ADMIN_PIN_KEY);
 }

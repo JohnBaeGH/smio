@@ -1,9 +1,9 @@
-import os
 import re
+import json
 import time
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+
+# short URL → normalized URL 캐시 (프로세스 재시작 전까지 유지)
+_url_cache: dict = {}
 
 
 def is_beverage(menu_name: str) -> bool:
@@ -41,17 +41,27 @@ def extract_naver_url(text: str) -> str | None:
 def normalize_url(url_input: str) -> str | None:
     import requests as req_lib
 
-    url = extract_naver_url(url_input)
-    if not url:
+    short_url = extract_naver_url(url_input)
+    if not short_url:
         return None
 
+    # short URL 캐시 확인
+    if short_url in _url_cache:
+        return _url_cache[short_url]
+
+    url = short_url
     if "naver.me" in url:
         try:
-            r = req_lib.head(url, allow_redirects=True, timeout=15)
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            }
+            r = req_lib.get(url, allow_redirects=True, timeout=15, headers=headers)
             url = r.url
         except Exception:
             pass
 
+    result = None
     for pattern in [
         r"place/(\d+)", r"restaurant/(\d+)",
         r"entry/place/(\d+)", r"/(\d+)/?(?:\?|$)",
@@ -60,58 +70,100 @@ def normalize_url(url_input: str) -> str | None:
         if m:
             place_id = m.group(1)
             if "m.place.naver.com" in url and "/menu/" in url:
-                return url
-            return f"https://m.place.naver.com/restaurant/{place_id}/menu/list?entry=plt"
-    return None
+                result = url
+            else:
+                result = f"https://m.place.naver.com/restaurant/{place_id}/menu/list?entry=plt"
+            break
+
+    if not result:
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(url)
+        qs = parse_qs(parsed.query)
+        for key in ("id", "pinId"):
+            if key in qs:
+                place_id = qs[key][0]
+                if place_id.isdigit():
+                    result = f"https://m.place.naver.com/restaurant/{place_id}/menu/list?entry=plt"
+                    break
+
+    if result:
+        _url_cache[short_url] = result
+    return result
 
 
-def _build_driver() -> webdriver.Chrome | None:
-    options = webdriver.ChromeOptions()
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option("useAutomationExtension", False)
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--disable-extensions")
-    options.add_argument("--disable-images")
-    options.add_argument("--window-size=1280,720")
-    options.add_argument(
-        "user-agent=Mozilla/5.0 (Linux; Android 13; Pixel 7) "
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Linux; Android 13; Pixel 7) "
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-    )
+    ),
+    "Accept-Language": "ko-KR,ko;q=0.9",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Referer": "https://m.place.naver.com/",
+}
 
-    chrome_paths = [
-        "/usr/bin/chromium-browser", "/usr/bin/chromium",
-        "/usr/bin/google-chrome", "/usr/bin/google-chrome-stable",
-    ]
-    driver_paths = [
-        "/usr/bin/chromedriver", "/usr/bin/chromium-chromedriver",
-        "/usr/local/bin/chromedriver",
-    ]
 
-    for p in chrome_paths:
-        if os.path.exists(p):
-            options.binary_location = p
-            break
+def _parse_apollo_state(src: str) -> tuple[list, dict]:
+    """HTML 소스에서 __APOLLO_STATE__ 파싱 → (menu_list, place_info)"""
+    idx = src.find("__APOLLO_STATE__ = ")
+    if idx < 0:
+        return [], {}
 
-    service = None
-    for p in driver_paths:
-        if os.path.exists(p):
-            service = Service(p)
-            break
-    if not service:
-        try:
-            service = Service(ChromeDriverManager().install())
-        except Exception:
-            return None
+    end = src.find(";\n", idx)
+    if end < 0:
+        end = src.find("</script>", idx)
+    if end < 0:
+        return [], {}
 
     try:
-        driver = webdriver.Chrome(service=service, options=options)
-        driver.set_page_load_timeout(20)
-        driver.implicitly_wait(5)
-        return driver
+        state = json.loads(src[idx + len("__APOLLO_STATE__ = "):end])
+    except Exception:
+        return [], {}
+
+    # 메뉴 추출 (Menu:PLACEID_INDEX 형태)
+    seen: set = set()
+    menu_list: list = []
+    for key in sorted(state.keys()):
+        if not key.startswith("Menu:"):
+            continue
+        item = state[key]
+        name = item.get("name", "")
+        if not name:
+            continue
+        price_raw = str(item.get("price", "") or "")
+        digits = re.sub(r"[^0-9]", "", price_raw)
+        price = int(digits) if digits else 0
+        k = f"{name}_{price}"
+        if k not in seen:
+            seen.add(k)
+            menu_list.append({"name": name, "price": price, "is_beverage": is_beverage(name)})
+
+    # 식당 기본 정보 (roadAddress 필드가 있는 첫 번째 객체)
+    place_info: dict = {}
+    for v in state.values():
+        if isinstance(v, dict) and v.get("roadAddress") or v.get("address"):
+            place_info = v
+            break
+    if not place_info:
+        for v in state.values():
+            if isinstance(v, dict) and v.get("name") and v.get("category"):
+                place_info = v
+                break
+
+    return menu_list, place_info
+
+
+def _fetch_page(menu_url: str) -> str | None:
+    import requests as req_lib
+
+    try:
+        r = req_lib.get(menu_url, headers=_HEADERS, timeout=15, allow_redirects=True)
+        if r.status_code != 200:
+            return None
+        src = r.content.decode("utf-8")
+        # 차단 페이지 감지 (6KB 미만이면 정상 페이지 아님)
+        if len(src) < 10_000 or "서비스 이용이 제한" in src:
+            return None
+        return src
     except Exception:
         return None
 
@@ -128,71 +180,28 @@ def scrape(url_input: str) -> dict:
     if menu_url in _cache:
         return _cache[menu_url]
 
-    driver = _build_driver()
-    if not driver:
-        return {"error": "브라우저 드라이버를 시작할 수 없습니다."}
+    src = _fetch_page(menu_url)
+    if not src:
+        return {"error": "페이지를 불러올 수 없습니다. 잠시 후 다시 시도해주세요."}
 
-    try:
-        driver.execute_cdp_cmd(
-            "Page.addScriptToEvaluateOnNewDocument",
-            {"source": "Object.defineProperty(navigator,'webdriver',{get:()=>undefined})"},
-        )
-        driver.get(menu_url)
+    menu_list, place_info = _parse_apollo_state(src)
 
-        for _ in range(24):
-            time.sleep(0.5)
-            if '"Menu:' in driver.page_source:
-                break
-        src = driver.page_source
+    if not menu_list:
+        return {"error": "메뉴 정보를 찾을 수 없습니다."}
 
-        # 메뉴 파싱
-        menu_list = []
-        seen = set()
-        for name, price_str in re.findall(
-            r'"Menu:\d+_\d+":\{[^}]*?"name":"([^"]+)"[^}]*?"price":"([^"]*)"', src
-        ):
-            if not name:
-                continue
-            price = None
-            digits = re.sub(r"[^0-9]", "", price_str)
-            if digits:
-                try:
-                    price = int(digits)
-                except ValueError:
-                    pass
-            key = f"{name}_{price}"
-            if key not in seen:
-                seen.add(key)
-                menu_list.append({
-                    "name": name,
-                    "price": price or 0,
-                    "is_beverage": is_beverage(name),
-                })
+    # og:title fallback for restaurant name
+    name = place_info.get("name", "")
+    if not name:
+        m = re.search(r'property="og:title" content="([^"]+) : 네이버"', src)
+        name = m.group(1).strip() if m else "이름 없음"
 
-        # 식당 기본 정보
-        name_m = re.search(r'"name":"([^"]+)","businessCategory"', src) or \
-                 re.search(r'"placeName":"([^"]+)"', src)
-        addr_m = re.search(r'"roadAddress":"([^"]+)"', src) or \
-                 re.search(r'"address":"([^"]+)"', src)
-        phone_m = re.search(r'"phone":"([^"]+)"', src) or \
-                  re.search(r'"tel":"([^"]+)"', src)
-        cat_m   = re.search(r'"businessCategory":"([^"]+)"', src) or \
-                  re.search(r'"category":"([^"]+)"', src)
-
-        result = {
-            "name": (name_m.group(1).strip() if name_m else "이름 없음"),
-            "address": (addr_m.group(1) if addr_m else ""),
-            "phone": (phone_m.group(1) if phone_m else ""),
-            "category": (cat_m.group(1) if cat_m else ""),
-            "menu": menu_list,
-        }
-        _cache[menu_url] = result
-        return result
-
-    except Exception as e:
-        return {"error": f"스크래핑 오류: {e}"}
-    finally:
-        try:
-            driver.quit()
-        except Exception:
-            pass
+    result = {
+        "source_url": menu_url,
+        "name": name,
+        "address": place_info.get("roadAddress") or place_info.get("address") or "",
+        "phone": place_info.get("phone") or place_info.get("tel") or "",
+        "category": place_info.get("category") or "",
+        "menu": menu_list,
+    }
+    _cache[menu_url] = result
+    return result

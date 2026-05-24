@@ -6,12 +6,10 @@ services:
       context: ./api
       dockerfile: Dockerfile
     container_name: smio-api
+    ports:
+      - "5005:5000"
     environment:
       - BASE_URL=https://smio2.johnbae.co.kr
-      - CHROME_BIN=/usr/bin/chromium
-      - CHROMEDRIVER_PATH=/usr/bin/chromedriver
-    ports:
-      - "5001:5000"
     volumes:
       - smio_rooms:/app/rooms
       - smio_logs:/app/logs
@@ -28,7 +26,7 @@ services:
       dockerfile: Dockerfile
     container_name: smio-web
     ports:
-      - "3100:3000"
+      - "3200:3000"
     depends_on:
       - api
     restart: unless-stopped

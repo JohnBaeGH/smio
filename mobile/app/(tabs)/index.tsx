@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -32,15 +32,17 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(false);
   const [favorites, setFavorites] = useState<FavoriteRestaurant[]>([]);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
   const loadData = useCallback(async () => {
     const [p, f] = await Promise.all([getProfile(), getFavorites()]);
     setProfile(p);
     setFavorites(f);
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const handleStart = async (inputUrl?: string) => {
     const target = (inputUrl ?? url).trim();
@@ -69,7 +71,7 @@ export default function HomeScreen() {
       setUrl("");
       router.push(`/room/${room.room_id}`);
     } catch (e) {
-      Alert.alert("오류", "식당 정보를 불러오지 못했습니다. URL을 확인해 주세요.");
+      Alert.alert("오류", "상점 정보를 불러오지 못했습니다. URL을 확인해 주세요.");
     } finally {
       setLoading(false);
     }
@@ -82,52 +84,47 @@ export default function HomeScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
-  const handleRemoveFavorite = (id: string) => {
-    Alert.alert("즐겨찾기 삭제", "삭제하시겠습니까?", [
-      { text: "취소", style: "cancel" },
-      {
-        text: "삭제",
-        style: "destructive",
-        onPress: async () => {
-          await removeFavorite(id);
-          setFavorites(await getFavorites());
-        },
-      },
-    ]);
+  const handleRemoveFavorite = async (id: string) => {
+    await removeFavorite(id);
+    setFavorites(await getFavorites());
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* 헤더 */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+      {/* 헤더 — lavender canvas, no colored bar */}
+      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <View>
-          <Text style={styles.headerTitle}>Smio</Text>
-          <Text style={styles.headerSub}>스마트 팀 주문</Text>
+          <Text style={styles.eyebrow}>SMIO</Text>
+          <Text style={styles.headerTitle}>팀 주문을{"\n"}스마트하게</Text>
         </View>
         {profile && (
           <View style={styles.profileBadge}>
-            <Text style={styles.profileText}>{profile.rank} {profile.name}</Text>
+            <View style={styles.profileAvatar}>
+              <Text style={styles.profileAvatarText}>{profile.name.charAt(0)}</Text>
+            </View>
+            <Text style={styles.profileText}>{profile.name}</Text>
           </View>
         )}
       </View>
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
         showsVerticalScrollIndicator={false}
       >
         {/* URL 입력 카드 */}
-        <View style={[styles.card, styles.inputCard]}>
+        <View style={styles.inputCard}>
           <Text style={styles.cardTitle}>새 주문방 만들기</Text>
           <Text style={styles.cardSub}>
-            네이버 플레이스 URL 또는 공유 링크를 붙여넣으세요
+            네이버 플레이스 URL을 붙여넣으세요
           </Text>
-          <View style={[styles.inputRow, { borderColor: colors.border }]}>
+          <View style={styles.inputRow}>
             <Feather name="link" size={16} color={colors.mutedForeground} />
             <TextInput
-              style={[styles.input, { color: colors.foreground }]}
+              style={styles.input}
               placeholder="naver.me/xxxx 또는 map.naver.com/..."
-              placeholderTextColor={colors.mutedForeground}
+              placeholderTextColor="#b0a0c8"
               value={url}
               onChangeText={setUrl}
               autoCapitalize="none"
@@ -154,7 +151,7 @@ export default function HomeScreen() {
             )}
           </Pressable>
           {loading && (
-            <Text style={[styles.loadingHint, { color: colors.mutedForeground }]}>
+            <Text style={styles.loadingHint}>
               메뉴를 가져오는 중입니다... (10~30초 소요)
             </Text>
           )}
@@ -163,67 +160,60 @@ export default function HomeScreen() {
         {/* 즐겨찾기 */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-              즐겨찾기
-            </Text>
-            <Text style={[styles.sectionCount, { color: colors.mutedForeground }]}>
-              {favorites.length}개
-            </Text>
+            <Text style={styles.sectionEyebrow}>즐겨찾기</Text>
+            <Text style={styles.sectionCount}>{favorites.length}개</Text>
           </View>
 
           {favorites.length === 0 ? (
-            <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Feather name="bookmark" size={32} color={colors.border} />
-              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                자주 가는 식당을 즐겨찾기에 추가하면{"\n"}다음부터 바로 주문방을 열 수 있어요
+            <View style={styles.emptyCard}>
+              <Feather name="bookmark" size={28} color="#c9b8e8" />
+              <Text style={styles.emptyText}>
+                자주 가는 상점을 즐겨찾기에 추가하면{"\n"}다음부터 바로 주문방을 열 수 있어요
               </Text>
             </View>
           ) : (
             favorites.map((fav) => (
-              <View
-                key={fav.id}
-                style={[styles.favCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-              >
+              <View key={fav.id} style={styles.favCard}>
                 <Pressable
                   style={styles.favMain}
                   onPress={() => handleStart(fav.url)}
                 >
-                  <View style={[styles.favIcon, { backgroundColor: colors.primaryLight }]}>
-                    <Feather name="map-pin" size={18} color={colors.primary} />
+                  <View style={styles.favIcon}>
+                    <Feather name="map-pin" size={17} color={colors.primary} />
                   </View>
                   <View style={styles.favInfo}>
-                    <Text style={[styles.favName, { color: colors.foreground }]}>{fav.name}</Text>
-                    <Text style={[styles.favUrl, { color: colors.mutedForeground }]} numberOfLines={1}>
+                    <Text style={styles.favName}>{fav.name}</Text>
+                    <Text style={styles.favUrl} numberOfLines={1}>
                       {fav.url}
                     </Text>
                   </View>
-                  <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+                  <Feather name="chevron-right" size={17} color="#c9b8e8" />
                 </Pressable>
                 <Pressable
                   style={styles.favDelete}
                   onPress={() => handleRemoveFavorite(fav.id)}
                 >
-                  <Feather name="trash-2" size={15} color={colors.destructive} />
+                  <Feather name="trash-2" size={14} color={colors.destructive} />
                 </Pressable>
               </View>
             ))
           )}
         </View>
 
-        {/* 사용법 안내 */}
-        <View style={[styles.card, styles.guideCard, { backgroundColor: colors.primaryLight }]}>
-          <Text style={[styles.guideTitle, { color: colors.primary }]}>사용 방법</Text>
+        {/* 사용법 */}
+        <View style={styles.guideCard}>
+          <Text style={styles.guideTitleText}>사용 방법</Text>
           {[
-            "네이버 지도/플레이스 앱에서 식당 공유",
+            "네이버 지도 앱에서 상점 공유",
             "URL 붙여넣고 '메뉴 불러오기' 탭",
-            "팀원들에게 주문방 링크 카카오톡 공유",
-            "각자 메뉴 선택 → 자동 취합 완료!",
+            "팀원들에게 주문방 링크 공유",
+            "각자 메뉴 선택 → 자동 취합!",
           ].map((step, i) => (
             <View key={i} style={styles.guideStep}>
-              <View style={[styles.guideNum, { backgroundColor: colors.primary }]}>
+              <View style={styles.guideNum}>
                 <Text style={styles.guideNumText}>{i + 1}</Text>
               </View>
-              <Text style={[styles.guideStepText, { color: colors.primaryDark }]}>{step}</Text>
+              <Text style={styles.guideStepText}>{step}</Text>
             </View>
           ))}
         </View>
@@ -232,89 +222,167 @@ export default function HomeScreen() {
   );
 }
 
+const CARD_SHADOW = {
+  shadowColor: colors.shadowColor,
+  shadowOffset: { width: 0, height: 6 },
+  shadowOpacity: 0.08,
+  shadowRadius: 16,
+  elevation: 4,
+};
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
   header: {
-    backgroundColor: colors.primary,
     paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingBottom: 20,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-end",
     justifyContent: "space-between",
   },
-  headerTitle: { fontSize: 24, fontWeight: "800", color: "#fff", letterSpacing: -0.5 },
-  headerSub: { fontSize: 13, color: "rgba(255,255,255,0.8)", marginTop: 2 },
-  profileBadge: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+  eyebrow: {
+    fontSize: 11,
+    fontWeight: "700",
+    fontFamily: "Pretendard-Bold",
+    letterSpacing: 0.06 * 11,
+    color: colors.primary,
+    marginBottom: 4,
+    textTransform: "uppercase",
   },
-  profileText: { fontSize: 13, color: "#fff", fontWeight: "600" },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: "800",
+    fontFamily: "Pretendard-ExtraBold",
+    letterSpacing: -0.6,
+    color: colors.foreground,
+    lineHeight: 34,
+  },
+  profileBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: colors.card,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    ...CARD_SHADOW,
+  },
+  profileAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  profileAvatarText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "700",
+    fontFamily: "Pretendard-Bold",
+  },
+  profileText: {
+    fontSize: 14,
+    color: colors.foreground,
+    fontWeight: "600",
+    fontFamily: "Pretendard-SemiBold",
+  },
+
   scroll: { flex: 1 },
-  card: {
+
+  inputCard: {
     marginHorizontal: 16,
-    marginTop: 16,
+    marginBottom: 8,
     backgroundColor: colors.card,
     borderRadius: colors.radius,
     padding: 20,
+    ...CARD_SHADOW,
   },
-  inputCard: {
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+  cardTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    fontFamily: "Pretendard-Bold",
+    color: colors.foreground,
+    marginBottom: 4,
   },
-  cardTitle: { fontSize: 17, fontWeight: "700", color: colors.foreground, marginBottom: 4 },
-  cardSub: { fontSize: 13, color: colors.mutedForeground, marginBottom: 14, lineHeight: 18 },
+  cardSub: {
+    fontSize: 13,
+    color: colors.mutedForeground,
+    marginBottom: 14,
+    lineHeight: 18,
+  },
   inputRow: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1.5,
-    borderRadius: colors.radius,
+    borderColor: colors.border,
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 8,
     marginBottom: 12,
+    backgroundColor: colors.background,
   },
-  input: { flex: 1, fontSize: 14 },
+  input: { flex: 1, fontSize: 14, color: colors.foreground },
   startBtn: {
     backgroundColor: colors.primary,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 14,
-    borderRadius: colors.radius,
+    paddingVertical: 15,
+    borderRadius: 12,
     gap: 8,
   },
-  startBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-  loadingHint: { fontSize: 12, textAlign: "center", marginTop: 10 },
+  startBtnText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+    fontFamily: "Pretendard-Bold",
+  },
+  loadingHint: { fontSize: 12, textAlign: "center", marginTop: 10, color: colors.mutedForeground },
+
   section: { marginHorizontal: 16, marginTop: 24 },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  sectionTitle: { fontSize: 16, fontWeight: "700" },
-  sectionCount: { fontSize: 13 },
+  sectionEyebrow: {
+    fontSize: 11,
+    fontWeight: "700",
+    fontFamily: "Pretendard-Bold",
+    letterSpacing: 0.06 * 11,
+    textTransform: "uppercase",
+    color: colors.mutedForeground,
+  },
+  sectionCount: { fontSize: 12, color: colors.mutedForeground },
+
   emptyCard: {
     borderWidth: 1.5,
     borderStyle: "dashed",
+    borderColor: colors.border,
     borderRadius: colors.radius,
     padding: 24,
     alignItems: "center",
     gap: 10,
+    backgroundColor: "rgba(255,255,255,0.5)",
   },
-  emptyText: { fontSize: 13, textAlign: "center", lineHeight: 20 },
+  emptyText: {
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 20,
+    color: colors.mutedForeground,
+  },
+
   favCard: {
-    borderWidth: 1,
+    backgroundColor: colors.card,
     borderRadius: colors.radius,
     marginBottom: 8,
     flexDirection: "row",
     alignItems: "center",
     overflow: "hidden",
+    ...CARD_SHADOW,
   },
   favMain: {
     flex: 1,
@@ -327,27 +395,50 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
+    backgroundColor: colors.primaryLight,
     alignItems: "center",
     justifyContent: "center",
   },
   favInfo: { flex: 1 },
-  favName: { fontSize: 15, fontWeight: "600", marginBottom: 2 },
-  favUrl: { fontSize: 12 },
+  favName: {
+    fontSize: 15,
+    fontWeight: "600",
+    fontFamily: "Pretendard-SemiBold",
+    color: colors.foreground,
+    marginBottom: 2,
+  },
+  favUrl: { fontSize: 12, color: colors.mutedForeground },
   favDelete: {
     padding: 16,
     borderLeftWidth: 1,
     borderLeftColor: colors.border,
   },
-  guideCard: { marginBottom: 8 },
-  guideTitle: { fontSize: 14, fontWeight: "700", marginBottom: 12 },
+
+  guideCard: {
+    marginHorizontal: 16,
+    marginTop: 24,
+    marginBottom: 8,
+    backgroundColor: colors.primaryLight,
+    borderRadius: colors.radius,
+    padding: 18,
+    gap: 0,
+  },
+  guideTitleText: {
+    fontSize: 13,
+    fontWeight: "700",
+    fontFamily: "Pretendard-Bold",
+    color: colors.primary,
+    marginBottom: 12,
+  },
   guideStep: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
   guideNum: {
     width: 22,
     height: 22,
     borderRadius: 11,
+    backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
   guideNumText: { color: "#fff", fontSize: 12, fontWeight: "700" },
-  guideStepText: { fontSize: 13, flex: 1 },
+  guideStepText: { fontSize: 13, flex: 1, color: colors.primaryDark },
 });

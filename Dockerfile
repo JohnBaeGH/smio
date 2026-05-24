@@ -11,6 +11,7 @@ RUN apt-get update && \
     chromium-driver \
     xvfb \
     procps \
+    nginx \
     && rm -rf /var/lib/apt/lists/*
 
 # Chrome/Chromium 실행 권한 설정
@@ -38,6 +39,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 애플리케이션 파일 복사
 COPY . .
 
+# nginx 설정 복사
+COPY nginx.conf /etc/nginx/sites-enabled/default
+RUN rm -f /etc/nginx/sites-enabled/default.bak
+
 # 포트 노출
 EXPOSE $PORT
 
@@ -49,13 +54,11 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 RUN echo '#!/bin/bash\n\
 # Xvfb 시작\n\
 Xvfb :99 -screen 0 1024x768x24 &\n\
-# 잠시 대기\n\
 sleep 2\n\
-# 포트 설정 (기본값 8080)\n\
-export PORT=${PORT:-8080}\n\
-echo "Starting Streamlit on port $PORT"\n\
-# Streamlit 실행\n\
-streamlit run smio_app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true\n\
+# Streamlit을 내부 포트 8501로 실행\n\
+streamlit run smio_app.py --server.port=8501 --server.address=0.0.0.0 --server.headless=true &\n\
+# nginx 시작 (외부 포트 8080 → 내부 8501 프록시)\n\
+nginx -g "daemon off;"\n\
 ' > /app/start.sh && chmod +x /app/start.sh
 
 # 실행 명령어
