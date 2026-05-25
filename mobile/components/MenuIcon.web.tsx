@@ -136,6 +136,27 @@ const ICONS: Record<string, El[]> = {
     ["circle", { cx: 14, cy: 16, r: 0.55 }, true],
     ["circle", { cx: 11, cy: 17, r: 0.55 }, true],
   ],
+  wine: [
+    ["path", { d: "M8 4h8l-2 9H10L8 4z" }],
+    ["path", { d: "M12 13v6" }],
+    ["path", { d: "M9 19h6" }],
+  ],
+  meat: [
+    ["path", { d: "M5 11a7 4 0 0014 0 7 4 0 00-14 0z" }],
+    ["path", { d: "M17 9c1.5-.5 3 .5 3 2s-1.5 2.5-3 2" }],
+    ["path", { d: "M4 11c-1.5-.5-3 .5-3 2s1.5 2.5 3 2" }],
+    ["path", { d: "M9 10c1-1 2.5-1 3.5 0" }],
+  ],
+  fries: [
+    ["path", { d: "M7 8v10M11 6v12M15 8v10" }],
+    ["path", { d: "M5 18h14" }],
+    ["path", { d: "M6 9c0-1 1-2 1-2M10 7c0-1 1-2 1-2M14 9c0-1 1-2 1-2" }],
+  ],
+  beer: [
+    ["path", { d: "M6 7h11l-1.5 13H7.5L6 7z" }],
+    ["path", { d: "M17 9h2.5a1.5 1.5 0 010 3H17" }],
+    ["path", { d: "M8 7V5M11 7V4M14 7V5" }],
+  ],
 };
 
 // ── keyword → icon name ───────────────────────────────────────
@@ -143,10 +164,16 @@ function resolveIconName(item: MenuItem): string {
   const n = (item.name ?? "").toLowerCase();
   const c = (item.category ?? "").toLowerCase();
 
+  // ── 주류 (is_beverage 체크 전) ──
+  if (/레드.?와인|화이트.?와인|와인/.test(n)) return "wine";
+  if (/바이젠|라거|에일|수제맥주|수입맥주|생맥주|맥주|생맥|하이볼/.test(n)) return "beer";
+
   if (item.is_beverage) {
+    if (/블랙티|얼그레이|민트티|민트/.test(n)) return "leaf";
     if (n.includes("라테") || n.includes("라떼") || n.includes("밀크") || n.includes("우유")) return "milk";
     if (n.includes("카푸치노") || n.includes("크림") || n.includes("폼")) return "foam";
-    if (n.includes("말차") || n.includes("녹차") || n.includes("허브") || n.includes("티") || n.includes("홍차")) return "leaf";
+    if (/말차|녹차|허브|홍차/.test(n)) return "leaf";
+    if (/티/.test(n)) return "leaf";
     if (n.includes("주스") || n.includes("에이드") || n.includes("스무디") || n.includes("레몬") || n.includes("딸기") || n.includes("망고")) return "fruit";
     if (n.includes("콜라") || n.includes("사이다") || n.includes("탄산")) return "soda";
     if (n.includes("식혜") || n.includes("수정과")) return "ricedrink";
@@ -154,39 +181,55 @@ function resolveIconName(item: MenuItem): string {
     return "coffee";
   }
 
-  // Dessert
+  // ── 비음료 음료 키워드 ──
+  if (/블랙티|얼그레이|민트티|민트/.test(n)) return "leaf";
+
+  // ── Dessert ──
   if (n.includes("케이크") || n.includes("타르트") || n.includes("마카롱") || n.includes("브라우니")) return "cake";
   if (n.includes("쿠키") || n.includes("비스킷") || n.includes("스콘") || n.includes("와플")) return "biscuit";
   if (n.includes("빙수") || n.includes("아이스크림") || n.includes("젤라또")) return "swirl";
 
-  // Food: noodles
+  // ── 감자튀김 ──
+  if (/감자.{0,3}튀김/.test(n)) return "fries";
+
+  // ── 파스타류 ──
+  if (/파스타|스파게티|리조또|알리오|올리오|까르보나라|봉골레|쉬림프로제|감베로니|포모도로|비프토마토|명란.{0,3}프리토/.test(n)) return "noodle_warm";
+
+  // ── 스테이크 / 육류 ──
+  if (/스테이크|부채살|안심|돈까스|삼겹|갈비/.test(n)) return "meat";
+
+  // ── Food: noodles ──
   if (n.includes("냉면") || n.includes("막국수") || (n.includes("냉") && n.includes("면"))) return "noodle_cold";
   if (n.includes("비빔") && n.includes("면")) return "noodle_mixed";
-  if (n.includes("칼국수") || n.includes("라면") || n.includes("파스타") || n.includes("우동") || n.includes("소면") || n.includes("국수")) return "noodle_warm";
+  if (/칼국수|라면|우동|소면|국수|우육|소바/.test(n)) return "noodle_warm";
   if (n.includes("냉") && (n.includes("짬뽕") || n.includes("짜장"))) return "noodle_cold";
   if (n.includes("짬뽕") || n.includes("짜장")) return "noodle_warm";
 
-  // Soups / stews
-  if (n.includes("찌개") || n.includes("전골") || n.includes("부대")) return "stew_pot";
-  if (n.includes("국") || n.includes("탕") || n.includes("곰탕") || n.includes("설렁탕") || n.includes("순두부")) return "soup_clear";
+  // ── 국밥류 (밥 패턴보다 먼저) ──
+  if (/짬뽕.{0,3}밥|순두부.{0,3}밥|국밥/.test(n)) return "soup_clear";
 
-  // Rice
+  // ── Soups / stews ──
+  if (n.includes("찌개") || n.includes("전골") || n.includes("부대")) return "stew_pot";
+  if (/국|탕|곰탕|설렁탕|순두부/.test(n)) return "soup_clear";
+
+  // ── Rice ──
   if (n.includes("볶음밥") || n.includes("덮밥") || n.includes("비빔밥") || n.includes("솥밥") || n.includes("김밥")) return "rice";
 
-  // Sandwich / bread
+  // ── Sandwich / bread ──
   if (n.includes("토스트") || n.includes("식빵") || n.includes("브런치")) return "toast";
   if (n.includes("샌드위치") || n.includes("버거") || n.includes("랩")) return "sandwich";
   if (n.includes("베이글")) return "bagel";
 
-  // Salad
+  // ── Salad ──
   if (n.includes("샐러드") || n.includes("야채") || n.includes("채소")) return "salad";
 
-  // Category fallbacks
+  // ── Category fallbacks ──
   if (c.includes("면") || c.includes("국수")) return "noodle_warm";
   if (c.includes("밥") || c.includes("한식")) return "rice";
   if (c.includes("국") || c.includes("탕")) return "soup_clear";
   if (c.includes("찌개")) return "stew_pot";
   if (c.includes("샐러드")) return "salad";
+  if (c === "drink") return "coffee";
 
   return "bowl";
 }

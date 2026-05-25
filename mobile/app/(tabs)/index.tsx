@@ -189,12 +189,14 @@ export default function HomeScreen() {
                   </View>
                   <Feather name="chevron-right" size={17} color="#c9b8e8" />
                 </Pressable>
-                <Pressable
-                  style={styles.favDelete}
-                  onPress={() => handleRemoveFavorite(fav.id)}
-                >
-                  <Feather name="trash-2" size={14} color={colors.destructive} />
-                </Pressable>
+                {!fav.pinned && (
+                  <Pressable
+                    style={styles.favDelete}
+                    onPress={() => handleRemoveFavorite(fav.id)}
+                  >
+                    <Feather name="trash-2" size={14} color={colors.destructive} />
+                  </Pressable>
+                )}
               </View>
             ))
           )}

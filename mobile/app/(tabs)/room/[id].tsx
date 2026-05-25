@@ -8,6 +8,7 @@ import {
   Alert,
   Clipboard,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -528,6 +529,16 @@ export default function RoomScreen() {
           ))}
         </View>
 
+        {/* 네이버 매장 링크 */}
+        {room?.restaurant_info?.source_url ? (
+          <Pressable
+            style={styles.naverLinkBtn}
+            onPress={() => Linking.openURL(room.restaurant_info.source_url!)}
+          >
+            <Text style={styles.naverLinkText}>🔗 실제 매장에서 메뉴 확인하기</Text>
+          </Pressable>
+        ) : null}
+
         <ScrollView showsVerticalScrollIndicator={false}>
           {/* ── 메뉴 탭 ── */}
           {tab === "menu" ? (
@@ -565,7 +576,7 @@ export default function RoomScreen() {
                           >
                             {/* Art block — Pattern D: soft gradient bg + line icon */}
                             <View style={[styles.menuArtBlock, { backgroundColor: tone.bg }]}>
-                              <MenuIcon item={item} color={tone.fg} size={68} />
+                              <MenuIcon item={item} color={tone.fg} size={Platform.OS === "android" ? 34 : 68} />
                               <View style={[styles.menuCategoryTag, { backgroundColor: "rgba(255,255,255,0.78)" }]}>
                                 <Text style={[styles.menuCategoryTagText, { color: tone.fg }]}>{tone.tag}</Text>
                               </View>
@@ -990,6 +1001,18 @@ const styles = StyleSheet.create({
   },
   shareBarText: { flex: 1, fontSize: 13, fontWeight: "500", color: colors.primary },
 
+  naverLinkBtn: {
+    marginHorizontal: 16, marginTop: 8, marginBottom: 4,
+    paddingVertical: 9, paddingHorizontal: 14,
+    backgroundColor: colors.primaryLight,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  naverLinkText: {
+    fontSize: 13, fontWeight: "600", color: colors.primary,
+    fontFamily: "Pretendard-SemiBold",
+  },
+
   // Tab pills
   tabBar: {
     flexDirection: "row", marginHorizontal: 16, marginBottom: 14,
@@ -1059,14 +1082,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999,
   },
   menuCategoryTagText: { fontSize: 10, fontWeight: "700" },
-  menuCardBody: { padding: 10, gap: 3 },
+  menuCardBody: { padding: 10, gap: 3, alignItems: "center" },
   menuCardName: {
-    fontSize: 26, fontWeight: "600", fontFamily: "Pretendard-SemiBold",
-    color: colors.foreground, lineHeight: 34,
+    fontSize: Platform.OS === "android" ? 9 : 17,
+    fontWeight: "600", fontFamily: "Pretendard-SemiBold",
+    color: colors.foreground,
+    lineHeight: Platform.OS === "android" ? 13 : 23,
+    textAlign: "center",
   },
   menuCardPrice: {
-    fontSize: 30, fontWeight: "800", fontFamily: "Pretendard-ExtraBold",
+    fontSize: Platform.OS === "android" ? 10 : 20,
+    fontWeight: "800", fontFamily: "Pretendard-ExtraBold",
     color: colors.primary,
+    textAlign: "center",
   },
   ownBadge: {
     position: "absolute", top: 6, right: 6,

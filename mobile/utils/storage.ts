@@ -13,7 +13,18 @@ export interface FavoriteRestaurant {
   name: string;
   url: string;
   savedAt: string;
+  pinned?: boolean;
 }
+
+const PINNED_FAVORITES: FavoriteRestaurant[] = [
+  {
+    id: "pinned_mammoth",
+    name: "매머드익스프레스 동탄AP점",
+    url: "https://m.place.naver.com/restaurant/1154641069/menu/list?entry=plt",
+    savedAt: "2026-01-01T00:00:00.000Z",
+    pinned: true,
+  },
+];
 
 export async function getProfile(): Promise<UserProfile | null> {
   const raw = await AsyncStorage.getItem(PROFILE_KEY);
@@ -26,7 +37,11 @@ export async function saveProfile(profile: UserProfile): Promise<void> {
 
 export async function getFavorites(): Promise<FavoriteRestaurant[]> {
   const raw = await AsyncStorage.getItem(FAVORITES_KEY);
-  return raw ? JSON.parse(raw) : [];
+  const userFavs: FavoriteRestaurant[] = raw ? JSON.parse(raw) : [];
+  // 고정 즐겨찾기는 항상 맨 위에, 사용자 목록에서 중복 제거
+  const pinnedIds = new Set(PINNED_FAVORITES.map((p) => p.id));
+  const filtered = userFavs.filter((f) => !pinnedIds.has(f.id));
+  return [...PINNED_FAVORITES, ...filtered];
 }
 
 export async function addFavorite(restaurant: Omit<FavoriteRestaurant, "id" | "savedAt">): Promise<void> {
