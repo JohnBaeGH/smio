@@ -40,6 +40,12 @@
         "projectId": "fdcf6a2c-1f3e-4a9d-add3-14f46c08ffeb"
       }
     },
-    "owner": "johnb-organization"
+    "owner": "johnb-organization",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/fdcf6a2c-1f3e-4a9d-add3-14f46c08ffeb"
+    }
   }
 }
