@@ -15,7 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import colors from "@/constants/colors";
 import { getApiBaseUrl } from "@/utils/api";
-import { getAdminPin } from "@/utils/storage";
+import { getAdminPin, getOrCreateDeviceId } from "@/utils/storage";
 
 interface RoomSummary {
   room_id: string;
@@ -64,7 +64,8 @@ export default function HistoryScreen() {
 
   const fetchRooms = useCallback(async () => {
     try {
-      const res = await fetch(`${getApiBaseUrl()}/rooms`);
+      const deviceId = await getOrCreateDeviceId();
+      const res = await fetch(`${getApiBaseUrl()}/rooms?owner_id=${encodeURIComponent(deviceId)}`);
       if (res.ok) setRooms(await res.json());
     } catch {
     } finally {
@@ -141,9 +142,10 @@ export default function HistoryScreen() {
     if (!confirmed) return;
     setDeleting(true);
     try {
+      const deviceId = await getOrCreateDeviceId();
       await Promise.all(
         Array.from(selected).map((room_id) =>
-          fetch(`${getApiBaseUrl()}/rooms/${room_id}`, { method: "DELETE" })
+          fetch(`${getApiBaseUrl()}/rooms/${room_id}?owner_id=${encodeURIComponent(deviceId)}`, { method: "DELETE" })
         )
       );
       await fetchRooms();

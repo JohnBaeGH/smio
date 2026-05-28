@@ -20,6 +20,7 @@ import {
   UserProfile,
   addFavorite,
   getFavorites,
+  getOrCreateDeviceId,
   getProfile,
   removeFavorite,
 } from "@/utils/storage";
@@ -37,6 +38,8 @@ export default function HomeScreen() {
     setProfile(p);
     setFavorites(f);
   }, []);
+
+  const getDeviceId = useCallback(() => getOrCreateDeviceId(), []);
 
   useFocusEffect(
     useCallback(() => {
@@ -61,10 +64,11 @@ export default function HomeScreen() {
       if (!res.ok) throw new Error("스크래핑 실패");
       const data = await res.json();
 
+      const deviceId = await getDeviceId();
       const roomRes = await fetch(`${getApiBaseUrl()}/rooms`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ restaurant: data }),
+        body: JSON.stringify({ restaurant: data, owner_id: deviceId }),
       });
       if (!roomRes.ok) throw new Error("방 생성 실패");
       const room = await roomRes.json();

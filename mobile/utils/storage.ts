@@ -2,6 +2,23 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const PROFILE_KEY = "smio_profile";
 const FAVORITES_KEY = "smio_favorites";
+const DEVICE_ID_KEY = "smio_device_id";
+
+function generateDeviceId(): string {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+export async function getOrCreateDeviceId(): Promise<string> {
+  let id = await AsyncStorage.getItem(DEVICE_ID_KEY);
+  if (!id) {
+    id = generateDeviceId();
+    await AsyncStorage.setItem(DEVICE_ID_KEY, id);
+  }
+  return id;
+}
 
 export interface UserProfile {
   name: string;

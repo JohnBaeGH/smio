@@ -49,12 +49,14 @@ def delete_room(room_id: str) -> bool:
         return False
 
 
-def list_rooms() -> list[dict]:
+def list_rooms(owner_id: str) -> list[dict]:
     _ensure_dirs()
     rooms = []
     for path in sorted(ROOMS_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
+            if data.get("owner_id") != owner_id:
+                continue
             rooms.append({
                 "room_id": data.get("room_id"),
                 "restaurant_name": data.get("restaurant_info", {}).get("name", ""),

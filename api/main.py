@@ -41,11 +41,12 @@ def scrape_restaurant(req: ScrapeRequest):
 
 class CreateRoomRequest(BaseModel):
     restaurant: dict
+    owner_id: str
 
 
 @app.get("/api/rooms")
-def list_rooms():
-    return storage.list_rooms()
+def list_rooms(owner_id: str):
+    return storage.list_rooms(owner_id)
 
 
 @app.post("/api/rooms")
@@ -53,6 +54,7 @@ def create_room(req: CreateRoomRequest):
     room_id = storage.new_room_id()
     data = {
         "room_id": room_id,
+        "owner_id": req.owner_id,
         "restaurant_info": req.restaurant,
         "orders": [],
         "is_closed": False,
@@ -72,9 +74,13 @@ def get_room(room_id: str):
 
 
 @app.delete("/api/rooms/{room_id}")
-def delete_room(room_id: str):
-    if not storage.delete_room(room_id):
+def delete_room(room_id: str, owner_id: str):
+    room = storage.load_room(room_id)
+    if not room:
         raise HTTPException(status_code=404, detail="주문방 없음")
+    if room.get("owner_id") != owner_id:
+        raise HTTPException(status_code=403, detail="권한 없음")
+    storage.delete_room(room_id)
     return {"ok": True}
 
 
