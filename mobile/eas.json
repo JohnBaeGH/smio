@@ -5,11 +5,13 @@
   },
   "build": {
     "preview": {
+      "channel": "main",
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
+      "channel": "main",
       "android": {
         "buildType": "app-bundle"
       }
