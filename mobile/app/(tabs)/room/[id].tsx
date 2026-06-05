@@ -173,6 +173,13 @@ export default function RoomScreen() {
   const [profile, setProfile] = useState<{ name: string } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
+  // 메뉴 직접 추가
+  const [addMenuVisible, setAddMenuVisible] = useState(false);
+  const [newMenuName, setNewMenuName] = useState("");
+  const [newMenuPrice, setNewMenuPrice] = useState("");
+  const [newMenuCategory, setNewMenuCategory] = useState<Category>("food");
+  const [addingMenu, setAddingMenu] = useState(false);
+
   useEffect(() => {
     getProfile().then(setProfile);
     fetchRoom();
@@ -268,6 +275,46 @@ export default function RoomScreen() {
       Alert.alert("오류", "주문 처리 중 오류가 발생했습니다.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openAddMenu = () => {
+    setNewMenuName("");
+    setNewMenuPrice("");
+    setNewMenuCategory("food");
+    setAddMenuVisible(true);
+    Haptics.selectionAsync();
+  };
+
+  const handleAddMenu = async () => {
+    const name = newMenuName.trim();
+    const price = parseInt(newMenuPrice.replace(/[^0-9]/g, ""), 10);
+    if (!name) { Alert.alert("메뉴 이름", "메뉴 이름을 입력해 주세요."); return; }
+    if (!Number.isFinite(price) || price < 0) {
+      Alert.alert("가격", "올바른 가격을 입력해 주세요."); return;
+    }
+    setAddingMenu(true);
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/rooms/${id}/menu`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          price,
+          category: CATEGORY_TONE[newMenuCategory].tag,
+          is_beverage: newMenuCategory === "drink",
+        }),
+      });
+      if (res.status === 409) { Alert.alert("중복", "이미 같은 이름의 메뉴가 있습니다."); return; }
+      if (!res.ok) throw new Error();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setAddMenuVisible(false);
+      showToast(`${name} 메뉴를 추가했어요 ✓`);
+      await fetchRoom();
+    } catch {
+      Alert.alert("오류", "메뉴 추가 중 오류가 발생했습니다.");
+    } finally {
+      setAddingMenu(false);
     }
   };
 
@@ -431,11 +478,11 @@ export default function RoomScreen() {
         const tempLabel = it.temp === "아이스" ? "🧊 아이스" : it.temp === "핫" ? "☕ 핫" : "";
         const sizeLabel = it.size !== "기본" ? ` ${it.size}` : "";
         const peopleStr = it.people.join(", ");
-        lines.push(`  ${tempLabel}${sizeLabel}  × ${it.qty}잔  (${peopleStr})`);
+        lines.push(`  ${tempLabel}${sizeLabel}  × ${it.qty}개  (${peopleStr})`);
       }
       lines.push("");
     }
-    lines.push(`합계: ${grandTotal.toLocaleString()}원 / 총 ${totalCount}잔 / ${room.orders.length}명`);
+    lines.push(`합계: ${grandTotal.toLocaleString()}원 / 총 ${totalCount}개 / ${room.orders.length}명`);
     Clipboard.setString(lines.join("\n"));
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     showToast("주문서를 복사했어요");
@@ -600,6 +647,18 @@ export default function RoomScreen() {
                   </View>
                 );
               })}
+
+              {!room.is_closed && (
+                <View style={{ paddingHorizontal: 14, marginTop: 6 }}>
+                  <Pressable style={styles.addMenuBtn} onPress={openAddMenu}>
+                    <Feather name="plus" size={16} color={colors.primary} />
+                    <Text style={styles.addMenuBtnText}>메뉴 직접 추가</Text>
+                  </Pressable>
+                  <Text style={styles.addMenuHint}>
+                    메뉴에 없는 항목은 직접 추가해서 함께 주문할 수 있어요.
+                  </Text>
+                </View>
+              )}
             </View>
 
           /* ── 현황 탭 ── */
@@ -619,7 +678,7 @@ export default function RoomScreen() {
                 <View style={styles.summaryCellRow}>
                   <SummaryCell label="인원" value={`${uniquePeople.length}명`} />
                   <View style={styles.summaryCellDivider} />
-                  <SummaryCell label="수량" value={`${totalCount}잔`} />
+                  <SummaryCell label="수량" value={`${totalCount}개`} />
                   <View style={styles.summaryCellDivider} />
                   <SummaryCell label="합계" value={`${grandTotal.toLocaleString()}원`} accent />
                 </View>
@@ -714,7 +773,7 @@ export default function RoomScreen() {
               <View style={[styles.sheetHeader, CARD_SHADOW]}>
                 <View>
                   <Text style={styles.sheetTitle}>총무 주문서</Text>
-                  <Text style={styles.sheetSub}>{room.restaurant_info.name} · {room.orders.length}명 · 총 {totalCount}잔</Text>
+                  <Text style={styles.sheetSub}>{room.restaurant_info.name} · {room.orders.length}명 · 총 {totalCount}개</Text>
                 </View>
                 <Pressable style={styles.copyBtn} onPress={handleCopySheet}>
                   <Feather name="copy" size={13} color={colors.primary} />
@@ -751,7 +810,7 @@ export default function RoomScreen() {
                           )}
                         </View>
                         <View style={styles.sheetItemRight}>
-                          <Text style={styles.sheetItemQty}>× {it.qty}잔</Text>
+                          <Text style={styles.sheetItemQty}>× {it.qty}개</Text>
                           <Text style={styles.sheetItemPeople}>{it.people.join(", ")}</Text>
                         </View>
                       </View>
@@ -883,7 +942,7 @@ export default function RoomScreen() {
                     </Text>
                     <TextInput
                       style={styles.memoInput}
-                      placeholder="예) 샷 추가요, 시럽 빼주세요"
+                      placeholder="예) 샷 추가요, 시럽 빼주세요, 곱빼기"
                       placeholderTextColor="#b0a0c8"
                       value={memo}
                       onChangeText={setMemo}
@@ -923,6 +982,89 @@ export default function RoomScreen() {
                     <Text style={styles.cartBtnText}>
                       {editingOrder ? "수정 완료" : `담기 · ${((selectedMenu?.price ?? 0) * quantity).toLocaleString()}원`}
                     </Text>
+                  )}
+                </Pressable>
+              </View>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
+
+      {/* 메뉴 직접 추가 바텀 시트 */}
+      <Modal visible={addMenuVisible} transparent animationType="slide" onRequestClose={() => setAddMenuVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setAddMenuVisible(false)}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+            <Pressable style={[styles.modalSheet, { paddingBottom: insets.bottom + 16 }]} onPress={() => {}}>
+              <View style={styles.modalHandle} />
+
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>메뉴 직접 추가</Text>
+                <Pressable onPress={() => setAddMenuVisible(false)} style={styles.modalCloseBtn}>
+                  <Feather name="x" size={16} color={colors.mutedForeground} />
+                </Pressable>
+              </View>
+
+              <View style={{ gap: 18, marginTop: 8 }}>
+                <View style={styles.optionSection}>
+                  <Text style={styles.optionSectionLabel}>메뉴 이름</Text>
+                  <TextInput
+                    style={styles.memoInput}
+                    placeholder="예) 아메리카노, 김치찌개"
+                    placeholderTextColor="#b0a0c8"
+                    value={newMenuName}
+                    onChangeText={setNewMenuName}
+                  />
+                </View>
+
+                <View style={styles.optionSection}>
+                  <Text style={styles.optionSectionLabel}>가격</Text>
+                  <TextInput
+                    style={styles.memoInput}
+                    placeholder="예) 4500"
+                    placeholderTextColor="#b0a0c8"
+                    keyboardType="number-pad"
+                    value={newMenuPrice}
+                    onChangeText={(t) => setNewMenuPrice(t.replace(/[^0-9]/g, ""))}
+                  />
+                </View>
+
+                <View style={styles.optionSection}>
+                  <Text style={styles.optionSectionLabel}>분류</Text>
+                  <View style={styles.optionRow}>
+                    {(["drink", "food", "dessert", "alcohol"] as const).map((c) => (
+                      <Pressable
+                        key={c}
+                        style={[
+                          styles.optionBtn,
+                          {
+                            borderColor: newMenuCategory === c ? colors.primary : colors.border,
+                            backgroundColor: newMenuCategory === c ? colors.primaryLight : colors.background,
+                          },
+                        ]}
+                        onPress={() => setNewMenuCategory(c)}
+                      >
+                        <Text style={[
+                          styles.optionBtnText,
+                          { color: newMenuCategory === c ? colors.primary : colors.mutedForeground, fontWeight: newMenuCategory === c ? "700" : "400" },
+                        ]}>
+                          {CATEGORY_TONE[c].tag}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.modalBtns}>
+                <Pressable
+                  style={[styles.cartBtn, { opacity: addingMenu ? 0.7 : 1 }]}
+                  onPress={handleAddMenu}
+                  disabled={addingMenu}
+                >
+                  {addingMenu ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.cartBtnText}>메뉴 추가</Text>
                   )}
                 </Pressable>
               </View>
@@ -1095,6 +1237,20 @@ const styles = StyleSheet.create({
     fontWeight: "800", fontFamily: "Pretendard-ExtraBold",
     color: colors.primary,
     textAlign: "center",
+  },
+  addMenuBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 6, paddingVertical: 14, borderRadius: colors.radius,
+    borderWidth: 1.5, borderColor: colors.primary, borderStyle: "dashed",
+    backgroundColor: colors.primaryLight,
+  },
+  addMenuBtnText: {
+    fontSize: 14, fontWeight: "700", fontFamily: "Pretendard-Bold",
+    color: colors.primary,
+  },
+  addMenuHint: {
+    fontSize: 12, color: colors.mutedForeground, textAlign: "center",
+    marginTop: 8, lineHeight: 17,
   },
   ownBadge: {
     position: "absolute", top: 6, right: 6,

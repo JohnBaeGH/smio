@@ -124,6 +124,45 @@ def add_order(room_id: str, req: OrderRequest):
     return order
 
 
+# ── 메뉴 추가 ─────────────────────────────────────────────
+
+class MenuItemRequest(BaseModel):
+    name: str
+    price: int
+    category: Optional[str] = None
+    is_beverage: Optional[bool] = False
+
+
+@app.post("/api/rooms/{room_id}/menu")
+def add_menu_item(room_id: str, req: MenuItemRequest):
+    room = storage.load_room(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="주문방 없음")
+    if room.get("is_closed"):
+        raise HTTPException(status_code=403, detail="마감된 주문방입니다.")
+
+    name = (req.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="메뉴 이름을 입력해 주세요.")
+    if req.price is None or req.price < 0:
+        raise HTTPException(status_code=422, detail="가격이 올바르지 않습니다.")
+
+    info = room.setdefault("restaurant_info", {})
+    menu = info.setdefault("menu", [])
+    if any((m.get("name") or "").strip() == name for m in menu):
+        raise HTTPException(status_code=409, detail="이미 같은 이름의 메뉴가 있습니다.")
+
+    item = {
+        "name": name,
+        "price": req.price,
+        "category": req.category,
+        "is_beverage": bool(req.is_beverage),
+    }
+    menu.append(item)
+    storage.save_room(room_id, room)
+    return item
+
+
 # ── 주문 수정 ─────────────────────────────────────────────
 
 @app.put("/api/rooms/{room_id}/orders/{user_name}")
