@@ -1,7 +1,7 @@
 import re
 import json
 import time
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 
 # short URL → normalized URL 캐시 (프로세스 재시작 전까지 유지)
 _url_cache: dict = {}
@@ -89,7 +89,6 @@ def normalize_url(url_input: str) -> str | None:
             break
 
     if not result:
-        from urllib.parse import urlparse, parse_qs
         parsed = urlparse(url)
         qs = parse_qs(parsed.query)
         for key in ("id", "pinId"):
