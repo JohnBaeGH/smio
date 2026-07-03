@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { MenuIcon } from "@/components/MenuIcon";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -22,7 +22,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import colors from "@/constants/colors";
 import { getApiBaseUrl } from "@/utils/api";
-import { addFavorite, getFavorites, getProfile } from "@/utils/storage";
+import { addFavorite, getFavorites, getOrCreateDeviceId, getProfile } from "@/utils/storage";
 
 interface MenuItem {
   name: string;
@@ -32,6 +32,7 @@ interface MenuItem {
 }
 
 interface Order {
+  order_id?: string;
   user_name: string;
   rank: string;
   menu: string;
@@ -51,6 +52,7 @@ interface RoomData {
   };
   orders: Order[];
   is_closed: boolean;
+  is_owner?: boolean;
 }
 
 type Size = "기본" | "S" | "M" | "L";
@@ -180,12 +182,11 @@ export default function RoomScreen() {
   const [newMenuCategory, setNewMenuCategory] = useState<Category>("food");
   const [addingMenu, setAddingMenu] = useState(false);
 
+  const deviceIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     getProfile().then(setProfile);
-    fetchRoom();
-    pollRef.current = setInterval(fetchRoom, 5000);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [id]);
+  }, []);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -198,7 +199,10 @@ export default function RoomScreen() {
 
   const fetchRoom = useCallback(async () => {
     try {
-      const res = await fetch(`${getApiBaseUrl()}/rooms/${id}`);
+      if (!deviceIdRef.current) deviceIdRef.current = await getOrCreateDeviceId();
+      const res = await fetch(
+        `${getApiBaseUrl()}/rooms/${id}?device_id=${encodeURIComponent(deviceIdRef.current)}`
+      );
       if (!res.ok) return;
       const data = await res.json();
       setRoom(data);
@@ -209,6 +213,15 @@ export default function RoomScreen() {
       setLoading(false);
     }
   }, [id]);
+
+  // 화면이 포커스된 동안에만 5초 폴링 (백그라운드 배터리·서버 부하 방지)
+  useFocusEffect(
+    useCallback(() => {
+      fetchRoom();
+      pollRef.current = setInterval(fetchRoom, 5000);
+      return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    }, [fetchRoom])
+  );
 
   const openMenuDetail = (item: MenuItem) => {
     setSelectedMenu(item);
@@ -224,11 +237,13 @@ export default function RoomScreen() {
   const openEditDetail = (order: Order) => {
     const menuItem = room?.restaurant_info.menu.find((m) => order.menu.startsWith(m.name));
     if (!menuItem) return;
+    // 기존 주문의 사이즈·온도 옵션을 프리필 (초기화되어 덮어써지는 것 방지)
+    const parsed = parseMenuStr(order.menu);
     setSelectedMenu(menuItem);
     setQuantity(order.quantity);
     setMemo(order.memo ?? "");
-    setTemperature(null);
-    setSize("기본");
+    setTemperature(parsed.temp === "아이스" || parsed.temp === "핫" ? parsed.temp : null);
+    setSize((["S", "M", "L"].includes(parsed.size) ? parsed.size : "기본") as Size);
     setEditingOrder(order);
     setModalVisible(true);
     Haptics.selectionAsync();
@@ -249,8 +264,9 @@ export default function RoomScreen() {
       ].filter(Boolean);
       const menuName = parts.join(" ");
 
+      // order_id 우선 (같은 사람이 여러 주문을 담아도 정확히 해당 주문만 수정)
       const endpoint = editingOrder
-        ? `${getApiBaseUrl()}/rooms/${id}/orders/${encodeURIComponent(profile.name)}`
+        ? `${getApiBaseUrl()}/rooms/${id}/orders/${encodeURIComponent(editingOrder.order_id ?? editingOrder.user_name)}`
         : `${getApiBaseUrl()}/rooms/${id}/orders`;
       const res = await fetch(endpoint, {
         method: editingOrder ? "PUT" : "POST",
@@ -329,7 +345,14 @@ export default function RoomScreen() {
             ])
           );
     if (!confirmed) return;
-    await fetch(`${getApiBaseUrl()}/rooms/${id}/close`, { method: "POST" });
+    const res = await fetch(
+      `${getApiBaseUrl()}/rooms/${id}/close?owner_id=${encodeURIComponent(deviceIdRef.current ?? "")}`,
+      { method: "POST" }
+    );
+    if (!res.ok) {
+      Alert.alert("오류", "주문 마감에 실패했습니다. 방장만 마감할 수 있어요.");
+      return;
+    }
     fetchRoom();
     showToast("주문을 마감했어요");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -346,7 +369,14 @@ export default function RoomScreen() {
             ])
           );
     if (!confirmed) return;
-    await fetch(`${getApiBaseUrl()}/rooms/${id}/reopen`, { method: "POST" });
+    const res = await fetch(
+      `${getApiBaseUrl()}/rooms/${id}/reopen?owner_id=${encodeURIComponent(deviceIdRef.current ?? "")}`,
+      { method: "POST" }
+    );
+    if (!res.ok) {
+      Alert.alert("오류", "마감 취소에 실패했습니다. 방장만 취소할 수 있어요.");
+      return;
+    }
     fetchRoom();
     showToast("마감을 취소했어요");
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -367,7 +397,7 @@ export default function RoomScreen() {
     setSubmitting(true);
     try {
       const res = await fetch(
-        `${getApiBaseUrl()}/rooms/${id}/orders/${encodeURIComponent(profile.name)}`,
+        `${getApiBaseUrl()}/rooms/${id}/orders/${encodeURIComponent(editingOrder.order_id ?? editingOrder.user_name)}`,
         { method: "DELETE" }
       );
       if (!res.ok) throw new Error();
@@ -555,9 +585,9 @@ export default function RoomScreen() {
         {/* 탭 */}
         <View style={styles.tabBar}>
           {([
-            { key: "menu", label: "메뉴" },
+            { key: "menu", label: "메뉴", live: false },
             { key: "orders", label: `현황 ${uniquePeople.length}명`, live: true },
-            { key: "sheet", label: "주문서" },
+            { key: "sheet", label: "주문서", live: false },
           ] as const).map(({ key, label, live }) => (
             <Pressable
               key={key}
@@ -753,18 +783,20 @@ export default function RoomScreen() {
                 </>
               )}
 
-              {/* 마감 버튼 */}
-              {!room.is_closed ? (
-                <Pressable style={[styles.closeBtn, { borderColor: colors.destructive }]} onPress={handleClose}>
-                  <Feather name="lock" size={15} color={colors.destructive} />
-                  <Text style={[styles.closeBtnText, { color: colors.destructive }]}>주문 마감하기</Text>
-                </Pressable>
-              ) : (
-                <Pressable style={[styles.closeBtn, { borderColor: colors.primary }]} onPress={handleReopen}>
-                  <Feather name="unlock" size={15} color={colors.primary} />
-                  <Text style={[styles.closeBtnText, { color: colors.primary }]}>마감 취소 (주문 재개)</Text>
-                </Pressable>
-              )}
+              {/* 마감 버튼 (방장 전용) */}
+              {room.is_owner ? (
+                !room.is_closed ? (
+                  <Pressable style={[styles.closeBtn, { borderColor: colors.destructive }]} onPress={handleClose}>
+                    <Feather name="lock" size={15} color={colors.destructive} />
+                    <Text style={[styles.closeBtnText, { color: colors.destructive }]}>주문 마감하기</Text>
+                  </Pressable>
+                ) : (
+                  <Pressable style={[styles.closeBtn, { borderColor: colors.primary }]} onPress={handleReopen}>
+                    <Feather name="unlock" size={15} color={colors.primary} />
+                    <Text style={[styles.closeBtnText, { color: colors.primary }]}>마감 취소 (주문 재개)</Text>
+                  </Pressable>
+                )
+              ) : null}
             </View>
 
           /* ── 주문서 탭 ── */

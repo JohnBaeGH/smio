@@ -96,7 +96,7 @@ export default function HistoryScreen() {
           { text: "취소", style: "cancel" },
           {
             text: "확인",
-            onPress: (input) => {
+            onPress: (input?: string) => {
               if (input === pin) {
                 setAdminMode(true);
                 setSelected(new Set());

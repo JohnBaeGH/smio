@@ -1,9 +1,21 @@
 import re
 import json
 import time
+from urllib.parse import urlparse
 
 # short URL → normalized URL 캐시 (프로세스 재시작 전까지 유지)
 _url_cache: dict = {}
+
+# 서버가 대신 fetch해도 되는 호스트 (SSRF 방지 — 반드시 hostname 기준으로 검사)
+_ALLOWED_HOSTS = ("naver.me", "naver.com")
+
+
+def _is_allowed_host(url: str) -> bool:
+    try:
+        host = (urlparse(url).hostname or "").lower()
+    except Exception:
+        return False
+    return any(host == h or host.endswith("." + h) for h in _ALLOWED_HOSTS)
 
 
 def is_beverage(menu_name: str) -> bool:
@@ -23,16 +35,14 @@ def extract_naver_url(text: str) -> str | None:
         r"https://map\.naver\.com/[^\s\n\r]+",
         r"https://m\.place\.naver\.com/[^\s\n\r]+",
     ]
-    naver_keywords = [
-        "naver.me", "map.naver.com", "place.naver.com",
-        "m.place.naver.com", "m.map.naver.com", "pcmap.place.naver.com",
-    ]
     found = []
     for p in patterns:
         found.extend(re.findall(p, text, re.IGNORECASE))
     for url in found:
-        if any(kw in url.lower() for kw in naver_keywords):
-            return re.sub(r"[^\w\-\./:=?&%#]+$", "", url)
+        cleaned = re.sub(r"[^\w\-\./:=?&%#]+$", "", url)
+        # 부분 문자열 매칭이 아니라 실제 hostname으로 검사 (evil.com/?x=place.naver.com 차단)
+        if _is_allowed_host(cleaned):
+            return cleaned
 
     m = re.search(r"naver\.me/[A-Za-z0-9]+", text, re.IGNORECASE)
     return f"https://{m.group(0)}" if m else None
@@ -50,14 +60,16 @@ def normalize_url(url_input: str) -> str | None:
         return _url_cache[short_url]
 
     url = short_url
-    if "naver.me" in url:
+    if (urlparse(url).hostname or "").lower() == "naver.me":
         try:
             headers = {
                 "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
             }
             r = req_lib.get(url, allow_redirects=True, timeout=15, headers=headers)
-            url = r.url
+            # 리다이렉트 결과도 네이버 도메인일 때만 신뢰
+            if _is_allowed_host(r.url):
+                url = r.url
         except Exception:
             pass
 
@@ -69,7 +81,8 @@ def normalize_url(url_input: str) -> str | None:
         m = re.search(pattern, url)
         if m:
             place_id = m.group(1)
-            if "m.place.naver.com" in url and "/menu/" in url:
+            host = (urlparse(url).hostname or "").lower()
+            if host == "m.place.naver.com" and "/menu/" in url:
                 result = url
             else:
                 result = f"https://m.place.naver.com/restaurant/{place_id}/menu/list?entry=plt"
@@ -168,17 +181,20 @@ def _fetch_page(menu_url: str) -> str | None:
         return None
 
 
-# 캐시: {normalized_url: result}
+# 캐시: {normalized_url: (timestamp, result)} — 메뉴·가격 변동 반영을 위해 TTL 적용
 _cache: dict = {}
+_CACHE_TTL = 6 * 3600  # 6시간
+_CACHE_MAX = 500
 
 
 def scrape(url_input: str) -> dict:
     menu_url = normalize_url(url_input)
-    if not menu_url:
+    if not menu_url or not _is_allowed_host(menu_url):
         return {"error": "유효한 네이버 플레이스 URL이 아닙니다."}
 
-    if menu_url in _cache:
-        return _cache[menu_url]
+    cached = _cache.get(menu_url)
+    if cached and time.time() - cached[0] < _CACHE_TTL:
+        return cached[1]
 
     src = _fetch_page(menu_url)
     if not src:
@@ -203,5 +219,7 @@ def scrape(url_input: str) -> dict:
         "category": place_info.get("category") or "",
         "menu": menu_list,
     }
-    _cache[menu_url] = result
+    if len(_cache) >= _CACHE_MAX:
+        _cache.clear()
+    _cache[menu_url] = (time.time(), result)
     return result
